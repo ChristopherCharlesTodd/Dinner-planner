@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Dinner Draw</title>
+<title>Meal Draw</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#eef3f0;--surf:#fff;--ink:#14201b;--mute:#5c6b64;--acc:#1d5a47;--onacc:#fff;--line:#d3ddd7;--hi:#f2d8c9;
@@ -16,17 +16,24 @@ body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 "Bricolag
 main{max-width:640px;margin:0 auto;padding:20px 16px 56px}
 h1{font-size:2.4rem;font-weight:800;letter-spacing:-.03em;margin:8px 0 4px}
 h2{font-size:1.25rem;margin:32px 0 10px}
+h3{font-size:.95rem;margin:12px 0 4px;color:var(--mute)}
 p.sub{color:var(--mute);margin:0 0 18px}
 .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 button,select{font:inherit;border-radius:10px;border:1px solid var(--line);background:var(--surf);color:var(--ink);padding:10px 14px;min-height:44px;cursor:pointer}
-button.go{background:var(--acc);color:var(--onacc);border-color:var(--acc);font-weight:600}
-button:focus-visible,select:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+button.go,.seg button[aria-pressed="true"]{background:var(--acc);color:var(--onacc);border-color:var(--acc);font-weight:600}
+button:focus-visible,select:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.seg{display:flex;gap:8px;margin:0 0 18px}.seg button{flex:1}
 ul{list-style:none;margin:0;padding:0}
-.meal{display:flex;align-items:center;gap:10px;background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.meal{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.top{display:flex;align-items:center;gap:10px}
 .meal .d{width:2.6rem;color:var(--mute);font-size:.85rem}
 .meal .n{flex:1;font-weight:600}
 .tg{display:block;font-weight:400;font-size:.8rem;color:var(--mute)}
 .meal button{padding:6px 12px;min-height:44px}
+.rec summary{cursor:pointer;color:var(--acc);font-weight:600;min-height:44px;display:flex;align-items:center}
+.rec ul.ing li{padding:3px 0;border-bottom:1px solid var(--line)}
+.rec ol{list-style:decimal;padding-left:1.3rem;margin:0}
+.rec ol li{padding:3px 0}
 .cat{font-weight:600;color:var(--mute);margin:18px 0 6px;font-size:.95rem}
 .it{display:flex;align-items:center;gap:12px;padding:8px 2px;border-bottom:1px solid var(--line)}
 .it input{width:22px;height:22px;accent-color:var(--acc);flex:none}
@@ -35,15 +42,15 @@ ul{list-style:none;margin:0;padding:0}
 .it.done label{text-decoration:line-through;color:var(--mute)}
 .it a{color:var(--acc);font-weight:600;text-decoration:none;padding:10px 4px;white-space:nowrap}
 .note{background:var(--hi);border-radius:10px;padding:10px 12px;font-size:.9rem;margin-top:18px}
-@media (prefers-reduced-motion:no-preference){.meal{transition:transform .15s}.meal.fl{transform:scale(1.02)}}
 </style>
 </head>
 <body>
 <main>
-<h1>Dinner Draw</h1>
-<p class="sub">Pick the week’s dinners, then shop the list in Waitrose. Sized for two adults, a 3-year-old and a 6-month-old.</p>
+<h1>Meal Draw</h1>
+<div class="seg" role="group" aria-label="Meal type"><button id="td" aria-pressed="true">Dinners</button><button id="ts" aria-pressed="false">Protein shakes</button></div>
+<p class="sub" id="sub"></p>
 <div class="bar">
-<label for="n">Dinners</label>
+<label for="n" id="nl">Dinners</label>
 <select id="n"></select>
 <button class="go" id="draw">Draw new week</button>
 </div>
@@ -52,76 +59,126 @@ ul{list-style:none;margin:0;padding:0}
 <h2>Shopping list</h2>
 <div class="bar"><button id="copy">Copy list</button><button id="clr">Untick all</button></div>
 <div id="list"></div>
-<p class="note">“Find” opens a Waitrose search for that item. Quantities are a guide for two adults, a 3-year-old and a 6-month-old, so check what’s already in the cupboard. Babies under one shouldn’t have added salt, so set the baby’s portion aside before adding salty extras.</p>
+<p class="note" id="note"></p>
 </main>
 <script>
-// Ingredient: [name, qty, unit, aisle] aisles: M meat & fish, P fresh produce, D dairy & eggs, B bakery, C cupboard
-var AIS={M:"Meat and fish",P:"Fruit and veg",D:"Dairy and eggs",B:"Bakery",C:"Cupboard"};
+// Ingredient: [name, qty, unit, aisle]. Dinners: [name, ingredients, method steps]. Shakes: [name, ingredients, method steps, approx protein g]
+var AIS={M:"Meat and fish",P:"Fruit and veg",D:"Dairy and eggs",B:"Bakery",C:"Cupboard",F:"Frozen"};
 var MEALS=[
-["Chicken fajitas",[["Chicken breast",450,"g","M"],["Peppers",3,"","P"],["Onion",1,"","P"],["Tortilla wraps",8,"","B"],["Fajita seasoning",1,"","C"],["Soured cream",150,"ml","D"]]],
-["Spaghetti bolognese",[["Beef mince",500,"g","M"],["Spaghetti",400,"g","C"],["Chopped tomatoes",2,"","C"],["Onion",1,"","P"],["Carrots",2,"","P"],["Parmesan",50,"g","D"]]],
-["Salmon, new potatoes and greens",[["Salmon fillets",4,"","M"],["New potatoes",600,"g","P"],["Tenderstem broccoli",250,"g","P"],["Lemon",1,"","P"],["Butter",25,"g","D"]]],
-["Sausage and mash",[["Pork sausages",8,"","M"],["Potatoes",1000,"g","P"],["Butter",50,"g","D"],["Milk",100,"ml","D"],["Onion",2,"","P"],["Gravy granules",1,"","C"],["Frozen peas",300,"g","C"]]],
-["Veggie chilli with rice",[["Kidney beans",2,"","C"],["Chopped tomatoes",2,"","C"],["Peppers",2,"","P"],["Onion",1,"","P"],["Basmati rice",300,"g","C"],["Chilli powder",1,"","C"]]],
-["Chicken tikka masala",[["Chicken thighs",600,"g","M"],["Tikka masala sauce",1,"","C"],["Basmati rice",300,"g","C"],["Naan bread",4,"","B"],["Natural yoghurt",150,"g","D"]]],
-["Cottage pie",[["Beef mince",500,"g","M"],["Potatoes",900,"g","P"],["Carrots",3,"","P"],["Onion",1,"","P"],["Beef stock cubes",2,"","C"],["Butter",40,"g","D"]]],
-["Margherita pizza and salad",[["Pizza bases",2,"","B"],["Mozzarella",250,"g","D"],["Passata",1,"","C"],["Mixed salad leaves",1,"","P"],["Cherry tomatoes",250,"g","P"]]],
-["Fish pie",[["Fish pie mix",500,"g","M"],["Potatoes",800,"g","P"],["Leeks",2,"","P"],["Milk",500,"ml","D"],["Cheddar",100,"g","D"],["Frozen peas",200,"g","C"]]],
-["Prawn stir fry",[["King prawns",300,"g","M"],["Stir fry vegetables",400,"g","P"],["Egg noodles",300,"g","C"],["Soy sauce",1,"","C"],["Garlic",1,"","P"],["Ginger",1,"","P"]]],
-["Roast chicken and veg",[["Whole chicken",1,"","M"],["Potatoes",1000,"g","P"],["Carrots",4,"","P"],["Parsnips",3,"","P"],["Butter",50,"g","D"],["Gravy granules",1,"","C"]]],
-["Mushroom risotto",[["Arborio rice",300,"g","C"],["Chestnut mushrooms",300,"g","P"],["Onion",1,"","P"],["Vegetable stock cubes",2,"","C"],["Parmesan",60,"g","D"],["Butter",30,"g","D"]]],
-["Beef burgers and wedges",[["Beef burgers",4,"","M"],["Burger buns",4,"","B"],["Potatoes",800,"g","P"],["Cheese slices",4,"","D"],["Lettuce",1,"","P"],["Tomatoes",3,"","P"]]],
-["Pasta carbonara",[["Spaghetti",400,"g","C"],["Smoked bacon lardons",200,"g","M"],["Eggs",3,"","D"],["Parmesan",60,"g","D"],["Garlic",1,"","P"]]],
-["Lamb koftas with flatbreads",[["Lamb mince",500,"g","M"],["Flatbreads",4,"","B"],["Cucumber",1,"","P"],["Natural yoghurt",200,"g","D"],["Cherry tomatoes",250,"g","P"],["Red onion",1,"","P"]]],
-["Thai green curry",[["Chicken breast",450,"g","M"],["Thai green curry paste",1,"","C"],["Coconut milk",400,"ml","C"],["Green beans",200,"g","P"],["Jasmine rice",300,"g","C"],["Courgette",1,"","P"]]],
-["Jacket potatoes with beans and cheese",[["Baking potatoes",4,"","P"],["Baked beans",2,"","C"],["Cheddar",150,"g","D"],["Butter",25,"g","D"],["Coleslaw",1,"","D"]]],
-["Macaroni cheese",[["Macaroni",350,"g","C"],["Cheddar",200,"g","D"],["Milk",600,"ml","D"],["Butter",50,"g","D"],["Plain flour",1,"","C"],["Broccoli",1,"","P"]]],
-["Sausage and bean casserole",[["Pork sausages",8,"","M"],["Cannellini beans",2,"","C"],["Chopped tomatoes",2,"","C"],["Onion",1,"","P"],["Carrots",2,"","P"],["Crusty bread",1,"","B"]]],
-["Cod, chips and peas",[["Cod fillets",4,"","M"],["Oven chips",1,"","C"],["Frozen peas",300,"g","C"],["Lemon",1,"","P"],["Tartare sauce",1,"","C"]]],
-["Chicken Caesar wraps",[["Chicken breast",400,"g","M"],["Tortilla wraps",6,"","B"],["Little gem lettuce",2,"","P"],["Parmesan",40,"g","D"],["Caesar dressing",1,"","C"]]],
-["Shepherd’s lentil bake",[["Green lentils",2,"","C"],["Potatoes",800,"g","P"],["Carrots",3,"","P"],["Onion",1,"","P"],["Vegetable stock cubes",2,"","C"],["Tomato purée",1,"","C"]]]
+["Chicken fajitas",[["Chicken breast",450,"g","M"],["Peppers",3,"","P"],["Onion",1,"","P"],["Tortilla wraps",8,"","B"],["Fajita seasoning",1,"","C"],["Soured cream",150,"ml","D"]],
+["Slice the chicken, peppers and onion into strips.","Fry the chicken in a little oil for 6–8 minutes until cooked through with no pink inside.","Add the vegetables and seasoning and cook for 5 more minutes.","Warm the wraps and serve with soured cream."]],
+["Spaghetti bolognese",[["Beef mince",500,"g","M"],["Spaghetti",400,"g","C"],["Chopped tomatoes",2,"","C"],["Onion",1,"","P"],["Carrots",2,"","P"],["Parmesan",50,"g","D"]],
+["Chop the onion and grate the carrots, then fry in a little oil for 5 minutes.","Add the mince and brown it, breaking it up.","Add the tomatoes and simmer for 20–25 minutes.","Cook the spaghetti to the packet instructions, then serve with the sauce and grated parmesan."]],
+["Salmon, new potatoes and greens",[["Salmon fillets",4,"","M"],["New potatoes",600,"g","P"],["Tenderstem broccoli",250,"g","P"],["Lemon",1,"","P"],["Butter",25,"g","D"]],
+["Heat the oven to 200°C (180°C fan). Boil the potatoes for 15–20 minutes until tender.","Bake the salmon on a tray with butter and a squeeze of lemon for 12–15 minutes, until it flakes.","Steam or boil the broccoli for 3–4 minutes.","Serve together, checking the little ones’ fish for bones."]],
+["Sausage and mash",[["Pork sausages",8,"","M"],["Potatoes",1000,"g","P"],["Butter",50,"g","D"],["Milk",100,"ml","D"],["Onion",2,"","P"],["Gravy granules",1,"","C"],["Frozen peas",300,"g","C"]],
+["Bake the sausages at 200°C (180°C fan) for 20–25 minutes, turning once, until cooked through.","Boil the peeled, chopped potatoes for 15–20 minutes, then mash with butter and milk.","Fry the sliced onions slowly for 10–15 minutes until soft, then make the gravy.","Cook the peas and serve."]],
+["Veggie chilli with rice",[["Kidney beans",2,"","C"],["Chopped tomatoes",2,"","C"],["Peppers",2,"","P"],["Onion",1,"","P"],["Basmati rice",300,"g","C"],["Chilli powder",1,"","C"]],
+["Fry the chopped onion and peppers for 5 minutes.","Stir in the chilli powder, then the drained beans and tomatoes.","Simmer for 20 minutes.","Cook the rice to the packet instructions and serve."]],
+["Chicken tikka masala",[["Chicken thighs",600,"g","M"],["Tikka masala sauce",1,"","C"],["Basmati rice",300,"g","C"],["Naan bread",4,"","B"],["Natural yoghurt",150,"g","D"]],
+["Cut the chicken into chunks and fry for 5–6 minutes.","Add the sauce and simmer for 15 minutes, until the chicken is cooked through.","Cook the rice to the packet instructions.","Warm the naan and serve with a spoonful of yoghurt."]],
+["Cottage pie",[["Beef mince",500,"g","M"],["Potatoes",900,"g","P"],["Carrots",3,"","P"],["Onion",1,"","P"],["Beef stock cubes",2,"","C"],["Butter",40,"g","D"]],
+["Heat the oven to 200°C (180°C fan). Boil the chopped potatoes for 15–20 minutes.","Fry the onion and diced carrots for 5 minutes, then brown the mince in the pan.","Add the stock (cubes in about 300ml hot water) and simmer for 15 minutes.","Mash the potatoes with the butter, spoon over the mince in a dish and bake for 25 minutes until golden."]],
+["Margherita pizza and salad",[["Pizza bases",2,"","B"],["Mozzarella",250,"g","D"],["Passata",1,"","C"],["Mixed salad leaves",1,"","P"],["Cherry tomatoes",250,"g","P"]],
+["Heat the oven to 220°C (200°C fan).","Spread passata over the bases and top with torn mozzarella.","Bake for 10–12 minutes until golden and bubbling.","Toss the salad leaves with halved cherry tomatoes and serve alongside."]],
+["Fish pie",[["Fish pie mix",500,"g","M"],["Potatoes",800,"g","P"],["Leeks",2,"","P"],["Milk",500,"ml","D"],["Cheddar",100,"g","D"],["Frozen peas",200,"g","C"]],
+["Heat the oven to 200°C (180°C fan). Boil the chopped potatoes for 15–20 minutes, then mash with a splash of milk.","Simmer the sliced leeks and fish in the rest of the milk for 5 minutes, then stir in half the cheddar.","Tip into a dish, top with the mash and remaining cheddar, and bake for 20–25 minutes.","Cook the peas and check the fish for bones before serving to the little ones."]],
+["Prawn stir fry",[["King prawns",300,"g","M"],["Stir fry vegetables",400,"g","P"],["Egg noodles",300,"g","C"],["Soy sauce",1,"","C"],["Garlic",1,"","P"],["Ginger",1,"","P"]],
+["Cook the noodles to the packet instructions and drain.","Stir-fry grated garlic and ginger in hot oil for 30 seconds.","Add the prawns for 2–3 minutes until pink, then the vegetables for 3–4 minutes.","Toss in the noodles and a splash of soy sauce."]],
+["Roast chicken and veg",[["Whole chicken",1,"","M"],["Potatoes",1000,"g","P"],["Carrots",4,"","P"],["Parsnips",3,"","P"],["Butter",50,"g","D"],["Gravy granules",1,"","C"]],
+["Heat the oven to 200°C (180°C fan). Rub the chicken with butter and roast for the time on the packet, usually about 20 minutes per 500g plus 20 minutes.","Add the peeled potatoes, carrots and parsnips, tossed in oil, for the last hour.","Check the juices run clear, then rest the chicken for 15 minutes.","Make the gravy and carve."]],
+["Mushroom risotto",[["Arborio rice",300,"g","C"],["Chestnut mushrooms",300,"g","P"],["Onion",1,"","P"],["Vegetable stock cubes",2,"","C"],["Parmesan",60,"g","D"],["Butter",30,"g","D"]],
+["Make up about 1 litre of hot stock.","Soften the chopped onion in the butter for 5 minutes, then add the sliced mushrooms for 5 more.","Stir in the rice for 1 minute, then add the stock a ladle at a time, stirring, for about 20 minutes until creamy.","Stir in the parmesan."]],
+["Beef burgers and wedges",[["Beef burgers",4,"","M"],["Burger buns",4,"","B"],["Potatoes",800,"g","P"],["Cheese slices",4,"","D"],["Lettuce",1,"","P"],["Tomatoes",3,"","P"]],
+["Heat the oven to 220°C (200°C fan). Cut the potatoes into wedges, toss in oil and roast for 30–35 minutes, turning halfway.","Grill or fry the burgers for 5–6 minutes a side, until cooked through with no pink.","Add the cheese for the last minute and toast the buns.","Serve with lettuce and sliced tomatoes."]],
+["Pasta carbonara",[["Spaghetti",400,"g","C"],["Smoked bacon lardons",200,"g","M"],["Eggs",3,"","D"],["Parmesan",60,"g","D"],["Garlic",1,"","P"]],
+["Cook the spaghetti to the packet instructions, saving a mugful of the water.","Fry the lardons until crisp, then add crushed garlic for 1 minute.","Whisk the eggs with most of the parmesan.","Off the heat, toss the drained pasta with the bacon, then the egg mix, loosening with pasta water."]],
+["Lamb koftas with flatbreads",[["Lamb mince",500,"g","M"],["Flatbreads",4,"","B"],["Cucumber",1,"","P"],["Natural yoghurt",200,"g","D"],["Cherry tomatoes",250,"g","P"],["Red onion",1,"","P"]],
+["Mix the mince with half the finely chopped red onion and shape into 8 sausages.","Grill or fry for 10–12 minutes, turning, until cooked through.","Stir grated cucumber into the yoghurt.","Warm the flatbreads and serve with the tomatoes, remaining onion and yoghurt."]],
+["Thai green curry",[["Chicken breast",450,"g","M"],["Thai green curry paste",1,"","C"],["Coconut milk",400,"ml","C"],["Green beans",200,"g","P"],["Jasmine rice",300,"g","C"],["Courgette",1,"","P"]],
+["Fry the curry paste for 1 minute, then add the sliced chicken for 5 minutes.","Pour in the coconut milk and simmer for 10 minutes.","Add the sliced courgette and green beans and cook for 5–8 minutes, until the chicken is cooked through.","Cook the rice to the packet instructions and serve."]],
+["Jacket potatoes with beans and cheese",[["Baking potatoes",4,"","P"],["Baked beans",2,"","C"],["Cheddar",150,"g","D"],["Butter",25,"g","D"],["Coleslaw",1,"","D"]],
+["Heat the oven to 200°C (180°C fan). Prick the potatoes and bake for 1 hour to 1 hour 15 minutes.","Warm the beans in a pan.","Split the potatoes, add butter, beans and grated cheddar.","Serve with coleslaw."]],
+["Macaroni cheese",[["Macaroni",350,"g","C"],["Cheddar",200,"g","D"],["Milk",600,"ml","D"],["Butter",50,"g","D"],["Plain flour",1,"","C"],["Broccoli",1,"","P"]],
+["Cook the macaroni to the packet instructions.","Melt the butter, stir in 3 tablespoons of flour for 1 minute, then whisk in the milk gradually until thick.","Off the heat, stir in most of the cheddar and mix with the macaroni.","Top with the rest of the cheese and grill for 5 minutes. Steam the broccoli to serve."]],
+["Sausage and bean casserole",[["Pork sausages",8,"","M"],["Cannellini beans",2,"","C"],["Chopped tomatoes",2,"","C"],["Onion",1,"","P"],["Carrots",2,"","P"],["Crusty bread",1,"","B"]],
+["Brown the sausages in a casserole dish for 5 minutes, then cut into chunks.","Add the chopped onion and carrots for 5 minutes.","Add the tomatoes and drained beans and simmer for 25 minutes.","Serve with crusty bread."]],
+["Cod, chips and peas",[["Cod fillets",4,"","M"],["Oven chips",1,"","C"],["Frozen peas",300,"g","C"],["Lemon",1,"","P"],["Tartare sauce",1,"","C"]],
+["Bake the chips to the packet instructions.","Bake the cod at 200°C (180°C fan) for 12–15 minutes with a squeeze of lemon.","Cook the peas.","Serve with tartare sauce, checking the little ones’ fish for bones."]],
+["Chicken Caesar wraps",[["Chicken breast",400,"g","M"],["Tortilla wraps",6,"","B"],["Little gem lettuce",2,"","P"],["Parmesan",40,"g","D"],["Caesar dressing",1,"","C"]],
+["Slice the chicken and fry for 6–8 minutes until cooked through.","Shred the lettuce and shave the parmesan.","Toss the chicken and lettuce in the dressing.","Fill the wraps."]],
+["Shepherd’s lentil bake",[["Green lentils",2,"","C"],["Potatoes",800,"g","P"],["Carrots",3,"","P"],["Onion",1,"","P"],["Vegetable stock cubes",2,"","C"],["Tomato purée",1,"","C"]],
+["Heat the oven to 200°C (180°C fan). Boil the chopped potatoes for 15–20 minutes, then mash.","Fry the onion and diced carrots for 5 minutes. Add the drained lentils, purée and stock (cubes in about 300ml hot water) and simmer for 15 minutes.","Spoon into a dish, top with the mash and bake for 20 minutes until golden."]]
+];
+// Shakes are one adult serving each. Protein is approximate (about 24g per 30g scoop of powder, semi-skimmed milk).
+var SHAKES=[
+["Chocolate peanut butter",[["Protein powder",30,"g","C"],["Semi-skimmed milk",250,"ml","D"],["Banana",1,"","P"],["Peanut butter",15,"g","C"]],["Add the milk to the blender, then the rest, using chocolate powder.","Blend for 30–45 seconds until smooth.","Add ice for a thicker, colder shake."],38],
+["Strawberry banana",[["Protein powder",30,"g","C"],["Semi-skimmed milk",250,"ml","D"],["Banana",1,"","P"],["Frozen strawberries",80,"g","F"]],["Add the milk to the blender, then the rest, using vanilla or strawberry powder.","Blend until smooth."],35],
+["Banana oat breakfast",[["Protein powder",30,"g","C"],["Semi-skimmed milk",250,"ml","D"],["Banana",1,"","P"],["Porridge oats",30,"g","C"]],["Add the milk to the blender, then the rest, using vanilla powder.","Blend for about a minute so the oats break down."],38],
+["Mixed berry yoghurt",[["Protein powder",30,"g","C"],["Semi-skimmed milk",150,"ml","D"],["Greek yoghurt",100,"g","D"],["Frozen mixed berries",80,"g","F"]],["Add the milk and yoghurt to the blender, then the rest, using vanilla powder.","Blend until thick and smooth."],40],
+["Coffee mocha",[["Protein powder",30,"g","C"],["Semi-skimmed milk",250,"ml","D"],["Banana",1,"","P"],["Instant coffee",1,"","C"]],["Dissolve a teaspoon of instant coffee in a splash of hot water and let it cool.","Blend with the milk, banana and chocolate powder until smooth."],34],
+["Mango lassi",[["Protein powder",30,"g","C"],["Semi-skimmed milk",250,"ml","D"],["Frozen mango",100,"g","F"],["Greek yoghurt",50,"g","D"]],["Add the milk and yoghurt to the blender, then the rest, using vanilla powder.","Blend until smooth."],39],
+["Green pineapple",[["Protein powder",30,"g","C"],["Semi-skimmed milk",250,"ml","D"],["Baby spinach",30,"g","P"],["Banana",1,"","P"],["Frozen pineapple",80,"g","F"]],["Add the milk and spinach to the blender first and blend briefly.","Add the rest, using vanilla powder, and blend until smooth."],35],
+["Apple pie oat",[["Protein powder",30,"g","C"],["Semi-skimmed milk",250,"ml","D"],["Porridge oats",30,"g","C"],["Apple",1,"","P"]],["Core and chop the apple.","Blend everything with a pinch of cinnamon, using vanilla powder, until smooth."],38]
 ];
 var DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-var S={n:5,plan:[],done:{}};
-try{var s=JSON.parse(localStorage.getItem("dd1"));if(s&&s.plan&&s.plan.length)S=s}catch(e){}
+var S={mode:"d",d:{n:5,plan:[],done:{}},s:{n:4,plan:[],done:{}}};
+try{var s=JSON.parse(localStorage.getItem("dd2"));if(s&&s.d&&s.s&&s.d.plan&&s.s.plan&&(s.mode==="d"||s.mode==="s")){
+s.d.plan=s.d.plan.filter(function(i){return i<MEALS.length});s.s.plan=s.s.plan.filter(function(i){return i<SHAKES.length});S=s}}catch(e){}
 var SALTY=["Beef stock cubes","Vegetable stock cubes","Gravy granules","Soy sauce","Tikka masala sauce","Thai green curry paste","Smoked bacon lardons","Caesar dressing","Tartare sauce","Fajita seasoning","Chilli powder","Pork sausages","Cheese slices","Oven chips"];
 function salty(mi){return MEALS[mi][1].some(function(g){return SALTY.indexOf(g[0])>=0})}
-function save(){try{localStorage.setItem("dd1",JSON.stringify(S))}catch(e){}}
-function pick(exclude){var pool=MEALS.map(function(_,i){return i}).filter(function(i){return exclude.indexOf(i)<0});return pool[Math.floor(Math.random()*pool.length)]}
-function draw(){S.plan=[];for(var i=0;i<S.n;i++)S.plan.push(pick(S.plan));S.done={};save();render()}
+function cur(){return S[S.mode]}
+function data(){return S.mode==="d"?MEALS:SHAKES}
+function save(){try{localStorage.setItem("dd2",JSON.stringify(S))}catch(e){}}
+function pick(exclude){var all=data().map(function(_,i){return i});var pool=all.filter(function(i){return exclude.indexOf(i)<0});if(!pool.length)pool=all;return pool[Math.floor(Math.random()*pool.length)]}
+function draw(){var D=cur();D.plan=[];for(var i=0;i<D.n;i++)D.plan.push(pick(D.plan));D.done={};save();render()}
 function fmt(q,u){if(u==="g"&&q>=1000)return(q/1000)+"kg";if(u==="ml"&&q>=1000)return(q/1000)+"l";return u?q+u:(q>1?"×"+q:"")}
-function build(){var m={};S.plan.forEach(function(i){MEALS[i][1].forEach(function(g){var k=g[0]+"|"+g[2];if(!m[k])m[k]={n:g[0],q:0,u:g[2],a:g[3],k:k};m[k].q+=g[1]})});return Object.keys(m).map(function(k){var x=m[k];x.q=sc(x.q,x.u);return x})}
-// Recipes are written for 4 adults; household is 2 adults + a 3-year-old + a 6-month-old (about 2.75 portions)
+// Dinner recipes are written for 4 adults; household is 2 adults + a 3-year-old + a 6-month-old (about 2.75 portions)
 function sc(q,u){var f=0.7;if(u==="g"||u==="ml")return Math.ceil(q*f/25)*25;if(q===1)return 1;return Math.ceil(q*f)}
+function amt(g){return S.mode==="d"?sc(g[1],g[2]):g[1]}
+function build(){var m={};cur().plan.forEach(function(i){data()[i][1].forEach(function(g){var k=g[0]+"|"+g[2];if(!m[k])m[k]={n:g[0],q:0,u:g[2],a:g[3],k:k};m[k].q+=g[1]})});return Object.keys(m).map(function(k){var x=m[k];if(S.mode==="d")x.q=sc(x.q,x.u);return x})}
+function recipe(r){var h='<summary>Recipe</summary><h3>Ingredients'+(S.mode==="d"?' (for your household)':' (one shake)')+'</h3><ul class="ing">';
+r[1].forEach(function(g){var f=fmt(amt(g),g[2]);h+="<li>"+g[0]+(f?", "+f:"")+"</li>"});
+h+='</ul><h3>Method</h3><ol>';r[2].forEach(function(t){h+="<li>"+t+"</li>"});return h+"</ol>"}
+function fillSel(){var sel=document.getElementById("n");sel.innerHTML="";for(var i=(S.mode==="d"?2:1);i<=7;i++){var o=document.createElement("option");o.value=i;o.textContent=i;if(i===cur().n)o.selected=true;sel.appendChild(o)}}
+function setMode(m){S.mode=m;save();fillSel();if(!cur().plan.length)draw();else render()}
 function render(){
+var d=S.mode==="d",D=cur();
+document.getElementById("td").setAttribute("aria-pressed",d);document.getElementById("ts").setAttribute("aria-pressed",!d);
+document.getElementById("nl").textContent=d?"Dinners":"Shakes";
+document.getElementById("draw").textContent=d?"Draw new week":"Draw new shakes";
+document.getElementById("sub").textContent=d?"Pick the week’s dinners, then shop the list in Waitrose. Sized for two adults, a 3-year-old and a 6-month-old.":"Pick the week’s protein shakes, then shop the list in Waitrose. One serving per shake, for one adult.";
+document.getElementById("note").textContent=d?"“Find” opens a Waitrose search for that item. Quantities are a guide for two adults, a 3-year-old and a 6-month-old, so check what’s already in the cupboard. Babies under one shouldn’t have added salt, so set the baby’s portion aside before adding salty extras.":"“Find” opens a Waitrose search for that item. Pick any protein powder flavour and check what’s already in the cupboard. Protein figures are estimates based on about 24g of protein per 30g scoop, so check your tub. Shakes are for adults, not for the 3-year-old or the baby.";
 var p=document.getElementById("plan");p.innerHTML="";
-S.plan.forEach(function(mi,idx){var li=document.createElement("li");li.className="meal";
-li.innerHTML='<span class="d">'+DAYS[idx%7]+'</span><span class="n"></span><button>Swap</button>';
-var nm=li.querySelector(".n");nm.textContent=MEALS[mi][0];var t=document.createElement("small");t.className="tg";t.textContent=salty(mi)?"Set baby’s portion aside before the salty extras":"No salty ingredients, easy to adapt for baby";nm.appendChild(t);
-li.querySelector("button").setAttribute("aria-label","Swap "+MEALS[mi][0]);
-li.querySelector("button").onclick=function(){S.plan[idx]=pick(S.plan);S.done={};save();render()};
+D.plan.forEach(function(mi,idx){var r=data()[mi],li=document.createElement("li");li.className="meal";
+li.innerHTML='<div class="top"><span class="d">'+DAYS[idx%7]+'</span><span class="n"></span><button>Swap</button></div>';
+var nm=li.querySelector(".n");nm.textContent=r[0];var t=document.createElement("small");t.className="tg";
+t.textContent=d?(salty(mi)?"Set baby’s portion aside before the salty extras":"No salty ingredients, easy to adapt for baby"):"About "+r[3]+"g protein";nm.appendChild(t);
+var b=li.querySelector("button");b.setAttribute("aria-label","Swap "+r[0]);
+b.onclick=function(){D.plan[idx]=pick(D.plan);D.done={};save();render()};
+var det=document.createElement("details");det.className="rec";det.innerHTML=recipe(r);li.appendChild(det);
 p.appendChild(li)});
 var L=document.getElementById("list");L.innerHTML="";var items=build();
 Object.keys(AIS).forEach(function(a){var g=items.filter(function(x){return x.a===a}).sort(function(x,y){return x.n<y.n?-1:1});if(!g.length)return;
 var h=document.createElement("div");h.className="cat";h.textContent=AIS[a];L.appendChild(h);
-g.forEach(function(x,j){var id="c"+a+j;var r=document.createElement("div");r.className="it"+(S.done[x.k]?" done":"");
+g.forEach(function(x,j){var id="c"+a+j;var r=document.createElement("div");r.className="it"+(D.done[x.k]?" done":"");
 r.innerHTML='<input type="checkbox" id="'+id+'"><label for="'+id+'"></label><a target="_blank" rel="noopener">Find</a>';
 var lab=r.querySelector("label");lab.textContent=x.n;
 var q=fmt(x.q,x.u);if(q){var sp=document.createElement("span");sp.className="q";sp.textContent=q;lab.appendChild(sp)}
-var cb=r.querySelector("input");cb.checked=!!S.done[x.k];
-cb.onchange=function(){S.done[x.k]=cb.checked;r.classList.toggle("done",cb.checked);save()};
+var cb=r.querySelector("input");cb.checked=!!D.done[x.k];
+cb.onchange=function(){D.done[x.k]=cb.checked;r.classList.toggle("done",cb.checked);save()};
 var a2=r.querySelector("a");a2.href="https://www.waitrose.com/ecom/shop/search?&searchTerm="+encodeURIComponent(x.n);
 a2.setAttribute("aria-label","Find "+x.n+" at Waitrose");
 L.appendChild(r)})})}
-var sel=document.getElementById("n");
-for(var i=2;i<=7;i++){var o=document.createElement("option");o.value=i;o.textContent=i;if(i===S.n)o.selected=true;sel.appendChild(o)}
-sel.onchange=function(){S.n=+sel.value;while(S.plan.length>S.n)S.plan.pop();while(S.plan.length<S.n)S.plan.push(pick(S.plan));S.done={};save();render()};
+document.getElementById("n").onchange=function(){var D=cur();D.n=+this.value;while(D.plan.length>D.n)D.plan.pop();while(D.plan.length<D.n)D.plan.push(pick(D.plan));D.done={};save();render()};
+document.getElementById("td").onclick=function(){setMode("d")};
+document.getElementById("ts").onclick=function(){setMode("s")};
 document.getElementById("draw").onclick=draw;
-document.getElementById("clr").onclick=function(){S.done={};save();render()};
+document.getElementById("clr").onclick=function(){cur().done={};save();render()};
 document.getElementById("copy").onclick=function(){var t=build().map(function(x){var q=fmt(x.q,x.u);return x.n+(q?" ("+q+")":"")}).join("\n");var b=this;
 function ok(){b.textContent="Copied";setTimeout(function(){b.textContent="Copy list"},1500)}
 try{navigator.clipboard.writeText(t).then(ok,function(){})}catch(e){}};
-if(!S.plan.length)draw();else render();
+fillSel();if(!cur().plan.length)draw();else render();
 </script>
 </body>
 </html>
